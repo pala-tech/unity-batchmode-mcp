@@ -1,9 +1,7 @@
 {
   "name": "@pala-tech/unity-batchmode-mcp",
-  "version": "1.0.0",
-  "bin": {
-    "@pala-tech/unity-batchmode-mcp": "./build/index.js"
-  },
+  "version": "1.0.5",
+  "bin": "./bin.js",
   "scripts": {
     "build": "tsc && chmod 755 build/index.js",
     "start": "pnpm build && node build/index.js",
@@ -12,6 +10,8 @@
   "files": [
     "build"
   ],
+  "private": false,
+  "license": "MIT",
   "packageManager": "pnpm@10.6.2",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.2",
