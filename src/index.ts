@@ -15,13 +15,20 @@ function readStartupArg(flag: string, envVar?: string): string | undefined {
   return undefined;
 }
 
-const unityEditorPath =
-  readStartupArg("--unity-editor", "UNITY_EDITOR_PATH") ||
-  readStartupArg("--unityEditor", "UNITY_EDITOR_PATH");
+// Resolved at call-time so tests can set env before invoking
+function resolveUnityEditorPath(): string | undefined {
+  return (
+    readStartupArg("--unity-editor", "UNITY_EDITOR_PATH") ||
+    readStartupArg("--unityEditor", "UNITY_EDITOR_PATH")
+  );
+}
 
-const unityProjectPath =
-  readStartupArg("--project", "UNITY_PROJECT_PATH") ||
-  readStartupArg("--projectPath", "UNITY_PROJECT_PATH");
+function resolveUnityProjectPath(): string | undefined {
+  return (
+    readStartupArg("--project", "UNITY_PROJECT_PATH") ||
+    readStartupArg("--projectPath", "UNITY_PROJECT_PATH")
+  );
+}
 
 const server = new McpServer({
   name: "unity-batchmode-mcp",
@@ -33,10 +40,14 @@ const server = new McpServer({
 });
 
 
-async function runUnityTestsImpl(params: {
+export type RunUnityTestsParams = {
   filter?: string;
   platform?: "EditMode" | "PlayMode";
-}): Promise<string> {
+};
+
+export async function runUnityTests(params: RunUnityTestsParams): Promise<{ summary: string; exitCode: number }> {
+  const unityEditorPath = resolveUnityEditorPath();
+  const unityProjectPath = resolveUnityProjectPath();
   if (!unityEditorPath) {
     throw new Error("Missing Unity editor path. Provide via --unity-editor or UNITY_EDITOR_PATH.");
   }
@@ -89,7 +100,7 @@ async function runUnityTestsImpl(params: {
   });
 
   const exitCode: number = await new Promise((resolve) => {
-    child.on("close", (code) => resolve(code ?? 0));
+    child.on("close", (code: number) => resolve(code ?? 0));
   });
 
   // Attempt to parse the results file for a compact summary
@@ -141,7 +152,26 @@ async function runUnityTestsImpl(params: {
     summary += `\n\n[stderr tail]\n${tail(stderrBuf)}`;
   }
 
-  return summary;
+  // If the process failed, try to grep 'error' lines from the Unity log
+  if (exitCode !== 0) {
+    try {
+      const logText = await fs.readFile(logPath, "utf8");
+      const lines = logText.split(/\r?\n/);
+      const errorLines = lines.filter((line) => line.toLowerCase().includes("error"));
+      if (errorLines.length > 0) {
+        const max = 200;
+        const tailErrors = errorLines.length > max ? errorLines.slice(-max) : errorLines;
+        summary += `\n\n[log grep -i 'error' (${tailErrors.length}/${errorLines.length} matches)]\n`;
+        summary += tailErrors.join("\n");
+      } else {
+        summary += `\n\n[log grep -i 'error']\nNo 'error' lines found.`;
+      }
+    } catch (e) {
+      summary += `\n\n[log grep -i 'error']\nFailed to read log file: ${String(e)}`;
+    }
+  }
+
+  return { summary, exitCode };
 }
 
 server.tool(
@@ -152,25 +182,20 @@ server.tool(
     platform: z.enum(["EditMode", "PlayMode"]).describe("Test platform").optional().default("EditMode"),
   },
   async ({ filter, platform }) => {
-    const report = await runUnityTestsImpl({ filter, platform });
+    const { summary, exitCode } = await runUnityTests({ filter, platform });
     return {
       content: [
         {
           type: "text",
-          text: report,
+          text: summary,
         },
       ],
+      isError: exitCode !== 0,
     };
   }
 );
 
-async function start(): Promise<void> {
+export async function startServer(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
-
-start().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error("Failed to start MCP server:", err);
-  process.exit(1);
-});
