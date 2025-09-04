@@ -1,6 +1,6 @@
 {
   "name": "@pala-tech/unity-batchmode-mcp",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "bin": "./bin.js",
   "scripts": {
     "build": "tsc && chmod 755 build/*.js",
