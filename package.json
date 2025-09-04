@@ -1,9 +1,9 @@
 {
   "name": "@pala-tech/unity-batchmode-mcp",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "bin": "./bin.js",
   "scripts": {
-    "build": "tsc && chmod 755 build/index.js",
+    "build": "tsc && chmod 755 build/*.js",
     "start": "pnpm build && node build/index.js",
     "inspect": "npx @modelcontextprotocol/inspector pnpm start",
     "test": "node --test test/*.test.ts"
